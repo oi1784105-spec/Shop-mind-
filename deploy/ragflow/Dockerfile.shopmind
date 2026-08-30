@@ -1,0 +1,10 @@
+FROM infiniflow/ragflow:v0.27.0
+
+# Build with `vendor/ragflow` as the context. The upstream image already
+# contains the runtime and all server modules; only the generated ShopMind
+# frontend and the local-admin authentication override need to be layered on.
+COPY web/dist /ragflow/web/dist
+COPY admin/server/auth.py /ragflow/admin/server/auth.py
+COPY api/apps/__init__.py /ragflow/api/apps/__init__.py
+COPY api/db/services/dialog_service.py /ragflow/api/db/services/dialog_service.py
+COPY rag/llm/chat_model.py /ragflow/rag/llm/chat_model.py

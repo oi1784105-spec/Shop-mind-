@@ -1,0 +1,32 @@
+# Local secrets and runtime state
+vendor/ragflow/docker/.env
+vendor/ragflow/docker/.env.backup
+vendor/ragflow/docker/.env.*.local
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Generated frontend and local dependencies
+apps/shopmind-web/node_modules/
+apps/shopmind-web/dist/
+apps/shopmind-web/.npm-cache/
+apps/shopmind-web/*.tsbuildinfo
+
+# Python cache and local tooling artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.playwright-cli/
+.docker-config-temp/
+
+# Vendored RAGFlow build/runtime artifacts (the source and patched dist remain public)
+.vendor-ragflow-git-backup/
+.root-git-staging/
+.root-git-staging-2/
+vendor/ragflow/web/node_modules/
+vendor/ragflow/docker/ragflow-logs/
+vendor/ragflow/docker/.env*
+!vendor/ragflow/docker/.env.shopmind.example
+vendor/ragflow/**/__pycache__/
+vendor/ragflow/**/*.pyc

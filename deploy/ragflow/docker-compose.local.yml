@@ -1,0 +1,106 @@
+services:
+  es01:
+    ports: !override
+      - "127.0.0.1:${ES_PORT}:9200"
+
+  mysql:
+    ports: !override
+      - "127.0.0.1:${EXPOSE_MYSQL_PORT}:3306"
+
+  minio:
+    ports: !override
+      - "127.0.0.1:${MINIO_PORT}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT}:9001"
+
+  redis:
+    ports: !override
+      - "127.0.0.1:${REDIS_PORT}:6379"
+
+  ragflow-cpu:
+    image: shopmind/ragflow:v0.27.0-local
+    build:
+      context: ../../../vendor/ragflow
+      dockerfile: ../../deploy/ragflow/Dockerfile.shopmind
+    ports: !override
+      - "127.0.0.1:${RAGFLOW_OPS_HTTP_PORT:-8081}:80"
+      - "127.0.0.1:${SVR_WEB_HTTPS_PORT}:443"
+      - "127.0.0.1:${SVR_HTTP_PORT}:9380"
+      - "127.0.0.1:${ADMIN_SVR_HTTP_PORT}:9381"
+      - "127.0.0.1:${SVR_MCP_PORT}:9382"
+      - "127.0.0.1:${GO_HTTP_PORT}:9384"
+      - "127.0.0.1:${GO_ADMIN_PORT}:9383"
+    environment:
+      RAGFLOW_ADMIN_NO_LOGIN: "${RAGFLOW_ADMIN_NO_LOGIN:-true}"
+      RAGFLOW_SHOPMIND_TENANT_ID: "${RAGFLOW_SHOPMIND_TENANT_ID:-a47d94fea0fc11f19fd24919b2269901}"
+      RAGFLOW_OLLAMA_THINKING: "${RAGFLOW_OLLAMA_THINKING:-false}"
+      RAGFLOW_OLLAMA_MAX_TOKENS: "${RAGFLOW_OLLAMA_MAX_TOKENS:-128}"
+      RAGFLOW_OLLAMA_TEMPERATURE: "${RAGFLOW_OLLAMA_TEMPERATURE:-0}"
+      RAGFLOW_OLLAMA_TOP_P: "${RAGFLOW_OLLAMA_TOP_P:-0.2}"
+      RAGFLOW_OLLAMA_REPEAT_PENALTY: "${RAGFLOW_OLLAMA_REPEAT_PENALTY:-1.2}"
+      RAGFLOW_OLLAMA_REPEAT_LAST_N: "${RAGFLOW_OLLAMA_REPEAT_LAST_N:-128}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      es01:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  shopmind-api:
+    build:
+      context: ../../../apps/shopmind-api
+    environment:
+      SHOPMIND_DATABASE_PATH: /data/shopmind.db
+      SHOPMIND_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/2
+      SHOPMIND_SESSION_TTL_SECONDS: ${SHOPMIND_SESSION_TTL_SECONDS:-1800}
+      SHOPMIND_CONVERSATION_CACHE_TTL_SECONDS: ${SHOPMIND_CONVERSATION_CACHE_TTL_SECONDS:-7200}
+      SHOPMIND_COOKIE_SECURE: ${SHOPMIND_COOKIE_SECURE:-false}
+      SHOPMIND_ADMIN_USERNAME: ${SHOPMIND_ADMIN_USERNAME:-admin}
+      # Keep the compose file interpolatable without publishing a default
+      # credential; the API refuses to start until a real password is set.
+      SHOPMIND_ADMIN_PASSWORD: ${SHOPMIND_ADMIN_PASSWORD:-}
+      SHOPMIND_CORS_ORIGINS: http://127.0.0.1:${SHOPMIND_WEB_PORT:-8080},http://localhost:${SHOPMIND_WEB_PORT:-8080}
+      # Use RAGFlow's bundled Nginx proxy (port 80) for the internal product
+      # service. It reaches the API server from loopback and is covered by
+      # the local operations no-login bridge. Direct host API port 9380 keeps
+      # its normal API-key/JWT authentication.
+      RAGFLOW_BASE_URL: http://ragflow-cpu
+      RAGFLOW_API_KEY: ${RAGFLOW_API_KEY:-}
+      RAGFLOW_INTERNAL_PROXY: "true"
+      RAGFLOW_SHOPMIND_TENANT_ID: "${RAGFLOW_SHOPMIND_TENANT_ID:-a47d94fea0fc11f19fd24919b2269901}"
+      RAGFLOW_REQUEST_TIMEOUT_SECONDS: "${RAGFLOW_REQUEST_TIMEOUT_SECONDS:-180}"
+      RAGFLOW_DEFAULT_LLM_ID: ${RAGFLOW_DEFAULT_LLM_ID:-}
+      RAGFLOW_DEFAULT_EMBEDDING_MODEL: ${RAGFLOW_DEFAULT_EMBEDDING_MODEL:-}
+      RAGFLOW_OPS_URL: http://127.0.0.1:${RAGFLOW_OPS_HTTP_PORT:-8081}
+      SHOPMIND_RAGFLOW_ENV_FILE: /config/ragflow.env
+    volumes:
+      - shopmind_data:/data
+      - ../../../vendor/ragflow/docker/.env:/config/ragflow.env
+    ports:
+      - "127.0.0.1:${SHOPMIND_API_PORT:-8000}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      ragflow-cpu:
+        condition: service_started
+    networks:
+      - ragflow
+    restart: unless-stopped
+
+  shopmind-web:
+    build:
+      context: ../../../apps/shopmind-web
+    ports:
+      - "127.0.0.1:${SHOPMIND_WEB_PORT:-8080}:80"
+    depends_on:
+      shopmind-api:
+        condition: service_healthy
+    networks:
+      - ragflow
+    restart: unless-stopped
+
+volumes:
+  shopmind_data:
+    driver: local

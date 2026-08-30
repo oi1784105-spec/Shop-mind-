@@ -1,0 +1,2 @@
+"""ShopMind product API."""
+
