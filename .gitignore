@@ -13,6 +13,12 @@ apps/shopmind-web/dist/
 apps/shopmind-web/.npm-cache/
 apps/shopmind-web/*.tsbuildinfo
 
+# Vite 配置文件被编译出来的产物。tsconfig.node.json 已设 noEmit，因此这里的 .js
+# 一旦残留就永远不会更新，而 Vite 解析配置时 .js 优先于 .ts——它会把真正的
+# vite.config.ts 整个遮蔽掉。禁止再次提交。
+apps/shopmind-web/vite.config.js
+apps/shopmind-web/vite.config.d.ts
+
 # Python cache and local tooling artifacts
 __pycache__/
 *.py[cod]
