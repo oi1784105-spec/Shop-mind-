@@ -1,0 +1,92 @@
+name: Deploy online demo to GitHub Pages
+
+# 把产品前端构建成「纯静态演示版」并发布到 GitHub Pages。
+#
+# 演示版不依赖任何后端：所有接口由浏览器本地的模拟层接管
+# （见 apps/shopmind-web/src/demo），因此不需要 FastAPI、Redis 或 RAGFlow。
+# 真实系统仍需要 Docker Compose 起 RAGFlow 全栈，请参考 README。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/shopmind-web/**'
+      - '.github/workflows/deploy-pages.yml'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只允许一个发布流程，新的推送会取消排队中的旧任务。
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build demo bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # 仓库里还 vendored 了 RAGFlow 源码（约 55MB），发布演示版只需要前端目录。
+          sparse-checkout: |
+            apps/shopmind-web
+            .github
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # 与 Dockerfile 中前端构建镜像保持一致
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/shopmind-web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/shopmind-web
+        run: npm ci
+
+      - name: Type check
+        working-directory: apps/shopmind-web
+        run: npm run type-check
+
+      - name: Build static demo
+        working-directory: apps/shopmind-web
+        # 构建参数放在 .env.demo 里（演示模式 + Pages 子路径），
+        # 保证本地 `npm run build:demo` 与 CI 完全一致。
+        run: npm run build:demo
+
+      - name: Add SPA fallback
+        # 前端使用 BrowserRouter 的 history 路由：直接访问 /chat、/knowledge
+        # 这类路径时 Pages 会返回 404。把 index.html 复制成 404.html，
+        # 浏览器仍会加载应用并由前端路由接管。
+        working-directory: apps/shopmind-web/dist
+        run: cp index.html 404.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          # 首次发布前需要在仓库 Settings → Pages 里把 Source 设为 "GitHub Actions"。
+          # 流水线自带的 GITHUB_TOKEN 没有创建站点的权限，无法代替这一步。
+          enablement: true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/shopmind-web/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
