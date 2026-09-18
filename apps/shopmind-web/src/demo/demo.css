@@ -1,0 +1,73 @@
+/*
+ * 演示标记的样式。
+ * 单独一个文件，避免把演示相关样式混进产品样式表 styles.css。
+ * 颜色沿用产品既有的 CSS 变量，保证与顶栏其他元素一致。
+ */
+
+.demo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.demo-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-soft);
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.demo-badge-text {
+  font-weight: 600;
+}
+
+.demo-badge-reset {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--text-soft);
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.demo-badge-reset:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+/* 窄屏只保留状态点与短标签，避免把顶栏挤爆。 */
+@media (max-width: 860px) {
+  .demo-badge-text,
+  .demo-badge-reset {
+    display: none;
+  }
+
+  .demo-badge {
+    padding: 6px;
+    gap: 0;
+  }
+}
+
+/* 登录卡片内的演示说明。 */
+.demo-login-note {
+  margin: 14px 0 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-soft);
+  color: var(--text-soft);
+  font-size: 12.5px;
+  line-height: 1.7;
+}

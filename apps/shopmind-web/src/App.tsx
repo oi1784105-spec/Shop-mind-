@@ -34,9 +34,20 @@ import {
 } from 'lucide-react';
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, api } from './api';
+import { DEMO_CREDENTIALS, DEMO_MODE } from './demo';
+import { DemoBadge } from './demo/DemoBadge';
 import type { Conversation, Health, KnowledgeBase, KnowledgeDocument, KnowledgeVersion, Message, User } from './types';
 
 type Theme = 'light' | 'dark';
+
+/**
+ * public/ 下静态资源的带 base 地址。
+ * 部署到子路径时（GitHub Pages 的 /Shop-mind-/），写死 "/logo.png" 会 404，
+ * 因此必须拼上 import.meta.env.BASE_URL。
+ */
+function assetUrl(path: string): string {
+  return `${import.meta.env.BASE_URL}${path}`;
+}
 
 const statusLabels: Record<string, string> = {
   draft: '草稿',
@@ -99,7 +110,7 @@ function formatReadableText(value?: string | null) {
 function LoadingScreen() {
   return (
     <div className="loading-screen">
-      <img src="/logo.png" alt="ShopMind" />
+      <img src={assetUrl('logo.png')} alt="ShopMind" />
       <LoaderCircle className="spin" size={22} />
     </div>
   );
@@ -136,7 +147,8 @@ function Toast({ message, kind = 'error', onClose }: { message: string; kind?: '
 
 function LoginPage({ onLogin }: { onLogin: (user: User) => void }) {
   const [username, setUsername] = useState(() => localStorage.getItem('shopmind-remembered-username') || '');
-  const [password, setPassword] = useState('');
+  // 演示构建下预填演示密码，访客点一下登录即可体验；真实环境保持空白。
+  const [password, setPassword] = useState(() => (DEMO_MODE ? DEMO_CREDENTIALS.password : ''));
   const [showPassword, setShowPassword] = useState(false);
   const [rememberUsername, setRememberUsername] = useState(() => Boolean(localStorage.getItem('shopmind-remembered-username')));
   const [loading, setLoading] = useState(false);
@@ -180,7 +192,7 @@ function LoginPage({ onLogin }: { onLogin: (user: User) => void }) {
       <div className="login-glow login-glow-two" />
       <section className="login-story">
         <div className="brand-lockup">
-          <img src="/logo.png" alt="ShopMind" />
+          <img src={assetUrl('logo.png')} alt="ShopMind" />
           <span>ShopMind</span>
         </div>
         <div className="login-copy">
@@ -201,6 +213,12 @@ function LoginPage({ onLogin }: { onLogin: (user: User) => void }) {
             <h2>欢迎回来</h2>
             <p className="muted">使用企业账号登录 ShopMind 工作台</p>
           </div>
+          {DEMO_MODE && (
+            <p className="demo-login-note">
+              这是在线演示版：账号与密码已预填，直接点击登录即可体验知识库管理、文档解析状态与智能问答。
+              所有数据在浏览器本地生成，不会调用 RAGFlow 或任何模型服务。
+            </p>
+          )}
           <label className="login-field">
             <span>账号</span>
             <input
@@ -282,7 +300,7 @@ function AppShell({ user, theme, onTheme, onLogout }: { user: User; theme: Theme
     <div className="app-shell">
       <aside className={`sidebar ${mobileOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-brand">
-          <img src="/logo.png" alt="ShopMind" />
+          <img src={assetUrl('logo.png')} alt="ShopMind" />
           <div><strong>ShopMind</strong><span>企业智能客服</span></div>
         </div>
         <nav>
@@ -310,6 +328,7 @@ function AppShell({ user, theme, onTheme, onLogout }: { user: User; theme: Theme
             <div><span>ShopMind</span><strong>{current?.label || '工作台'}</strong></div>
           </div>
           <div className="topbar-actions">
+            <DemoBadge />
             <span className="system-chip"><span className="online-dot" /> 企业知识服务</span>
             <button className="icon-button" onClick={onTheme} title={theme === 'light' ? '切换深色模式' : '切换浅色模式'}>
               {theme === 'light' ? <Moon size={19} /> : <Sun size={19} />}
