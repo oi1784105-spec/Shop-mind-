@@ -4,6 +4,26 @@ ShopMind 是一个面向单企业内部使用的电商知识助手与客服工�
 
 > 当前版本用于学习、演示和企业内部原型验证，不接入真实订单、物流、退款或售后系统，也不包含真实客户隐私数据。
 
+## 在线体验
+
+**👉 打开即用：[https://oi1784105-spec.github.io/Shop-mind-/](https://oi1784105-spec.github.io/Shop-mind-/)**
+
+登录页已经预填演示账号，直接点击「登录」即可走完整流程：
+
+```text
+登录 → 工作台总览（指标卡 + 最近知识库）
+     → 知识中心：知识库 / 版本 / 文档，文档从「等待解析 → 解析中 → 已完成」
+     → 文档全部完成后「发布当前版本」，版本原子切换为生效版本
+     → 智能问答：选择参考知识库 → 提问 → 带回答依据的客服回复
+     → 系统设置：服务状态与 RAGFlow API Key 配置
+```
+
+关于在线版需要说明的三点：
+
+- 它是**纯静态演示版**，托管在 GitHub Pages 上，所有数据由浏览器本地生成，**不会调用 RAGFlow、Ollama 或任何模型服务**，也不需要 Docker。
+- 演示数据保存在浏览器 localStorage 中，随时可以点顶栏的「重置」回到初始状态；重置后再进知识中心，可以看到文档解析状态重新从「等待解析」推进到「已完成」。
+- 想要真实的知识库解析与检索能力，请按下方「快速部署」用 Docker Compose 起完整栈（RAGFlow + Redis + MySQL + MinIO + Ollama）。
+
 ## 预览
 
 ### ShopMind 产品登录页
@@ -57,6 +77,24 @@ ShopMind 不重复实现 RAGFlow 的文档处理服务。知识库版本在产�
 | RAG 引擎 | RAGFlow v0.27.0（vendor/ragflow） |
 | 本地模型 | Ollama（当前部署默认，可由 RAGFlow 继续连接其他供应商） |
 | 部署 | Docker Compose、Docker healthcheck |
+| 在线演示版 | GitHub Pages、GitHub Actions、浏览器端接口模拟层 |
+
+## 在线演示版是怎么做的
+
+在线版没有后端，却要能完整体验产品，因此前端内置了一个**演示层**（`apps/shopmind-web/src/demo/`），在浏览器里接管全部接口调用。
+
+| 问题 | 做法 |
+|---|---|
+| 后端跑不了 | FastAPI + Redis + RAGFlow 全栈无法托管在 GitHub Pages 上，因此只发布前端静态产物。 |
+| 接口怎么来 | 前端所有请求都经过 `src/api.ts` 的 `request()`，因此**替换 `window.fetch` 就能整体接管**，视图代码一行都没有改动。 |
+| 为什么必须返回 JSON 体 | `api.ts` 对任何 2xx 都会调用 `response.json()`：返回 204 或空体会抛 `SyntaxError`，让「操作成功了但界面报错」。因此演示层的删除、登出、创建版本等接口都返回 `{ "success": true }` 之类的 JSON。 |
+| 错误怎么返回 | 前端只识别 `detail` 字段，因此所有异常都返回 `{ "detail": "..." }` 并带正确状态码（404 / 409 / 422）。 |
+| 解析状态怎么模拟 | 文档状态由**时间戳**推导（`parse_starts_at` / `parse_ends_at`），而不是定时器：读取时按当前时间算出「等待解析 / 解析中 / 已完成」，这样刷新页面后状态依然正确。 |
+| 轮询为什么必须用 RUNNING | 前端每 2.5 秒轮询文档列表，并且**只在 `DONE` / `3` / `FAIL` / `failed` 时停止**。因此进行中的文档必须返回 `RUNNING` 或 `UNSTART`，否则会出现永远轮询或状态不推进的问题。 |
+| 发布门槛怎么对齐 | 前端与真实后端都要求**所有文档 `DONE`** 才允许发布；演示层同样校验，并把「解析失败」与「仍在解析」分开提示。 |
+| 数据从哪来 | 预置 3 个知识库（含已发布与草稿两种状态）、多版本、按状态分布的文档与 3 段带回答依据的历史会话；新提问的回复按主题在本地生成，并明确标注为演示内容。 |
+
+演示层实现分布在 6 个文件里，都不依赖 React，可单独测试：`index.ts`（fetch 垫片与路由）、`store.ts`（内存库与业务规则）、`content.ts`（预置数据与回答生成）、`types.ts`（数据结构）、`DemoBadge.tsx` / `demo.css`（顶栏演示标记）。
 
 ## 目录结构
 
@@ -130,6 +168,32 @@ docker compose -p ecommerce-ragflow --env-file vendor/ragflow/docker/.env -f ven
 ./scripts/test-ragflow.ps1
 docker compose -p ecommerce-ragflow ps
 ~~~
+
+### 在线演示版（GitHub Pages）
+
+演示版由 [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) 自动构建发布：推送到 `main` 且改动涉及前端时触发，也可以在 Actions 页面手动运行。
+
+```bash
+cd apps/shopmind-web
+npm ci
+npm run type-check
+npm run build:demo     # 等价于 vite build --mode demo
+```
+
+构建参数放在 `apps/shopmind-web/.env.demo` 中，本地与 CI 使用同一份配置：
+
+| 变量 | 作用 |
+|---|---|
+| `VITE_DEMO_MODE` | 打开演示模式，由浏览器本地的模拟层接管全部接口 |
+| `VITE_BASE` | 发布子路径，Pages 项目站点需要 `/<repo>/`（本仓库为 `/Shop-mind-/`） |
+
+子路径部署依赖三处配合，缺一会白屏或链接跳出：
+
+1. `vite.config.ts` 的 `base`（由 `VITE_BASE` 驱动）——否则 `/assets/...` 会 404；
+2. `main.tsx` 中 `BrowserRouter` 的 `basename`——否则站内链接会跳到站点根目录；
+3. `public/` 下的静态资源通过 `import.meta.env.BASE_URL` 拼接（`App.tsx` 的 `assetUrl()`）——否则 logo 会 404。
+
+流水线会把 `index.html` 复制为 `404.html`，使直接访问 `/knowledge` 这类前端路由时也能正常回退到应用。要让同一个代码库连真实后端，只要不带 demo 模式构建（`npm run build`）即可。
 
 ## 首次使用流程
 
